@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Fire X Scripts — Key Portal</title>
+<style>
+body{background:#0b0d12;color:#fff;font-family:sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;padding:16px}
+.card{width:100%;max-width:420px;background:#141821;border:1px solid #ff6b0055;border-radius:16px;padding:20px;box-shadow:0 15px 40px #000}
+h2{margin:0 0 4px;color:#ff8c3b}
+.sub{font-size:12px;color:#9ca3af;margin-bottom:16px}
+.box{background:#0f131a;border:1px solid #232936;border-radius:12px;padding:14px;margin-bottom:12px}
+input{width:100%;box-sizing:border-box;background:#090b10;border:1px solid #2e3646;color:#fff;padding:11px;border-radius:8px;margin-top:6px}
+.row{display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px}
+.btn{width:100%;padding:12px;border:none;border-radius:9px;font-weight:700;cursor:pointer;margin-top:8px;display:block;text-align:center;text-decoration:none;box-sizing:border-box}
+.fire{background:linear-gradient(135deg,#ff512f,#f09819);color:#fff}
+.dark{background:#1f2633;color:#e5e7eb;border:1px solid #323c4f}
+.green{background:#10b981;color:#fff}
+.key{background:#080a0e;border:1px dashed #ff6b00;color:#ffb36b;padding:12px;border-radius:8px;font-family:monospace;text-align:center;margin-top:8px;word-break:break-all}
+.msg{margin-top:10px;font-size:13px;padding:10px;border-radius:8px;background:#1e293b;color:#93c5fd;display:none}
+.hide{display:none}
+</style>
+</head>
+<body>
+<div class="card">
+  <h2>Fire X Scripts</h2>
+  <div class="sub">Official License & Key Verification Portal</div>
+  <div class="box">
+    <label style="font-size:12px;color:#9ca3af">Player Account ID</label>
+    <input id="acc" placeholder="Enter Account ID..." />
+    <button class="btn dark" onclick="loadStatus()">Check Stage & Progress</button>
+  </div>
+  <div id="panel" class="box hide">
+    <div class="row"><span>Next Stage:</span><strong id="stg" style="color:#ff8c3b">-</strong></div>
+    <div class="row"><span>Validity:</span><strong id="val">-</strong></div>
+    <div class="row"><span>Verified Ads:</span><strong id="ads">0 / 0</strong></div>
+    <a id="adBtn" href="#" target="_blank" class="btn fire hide">Watch Required Ad</a>
+    <button id="refBtn" class="btn dark hide" onclick="loadStatus()">I Watched Ad — Refresh</button>
+    <button id="clmBtn" class="btn green hide" onclick="claimKey()">Generate License Key</button>
+  </div>
+  <div id="keyBox" class="box hide">
+    <div style="font-size:12px;color:#9ca3af">Your Active Fire X Key:</div>
+    <div class="key" id="keyOut">-</div>
+    <button class="btn fire" onclick="copyKey()">Copy Key</button>
+    <div id="expOut" style="font-size:12px;color:#9ca3af;margin-top:8px;text-align:center"></div>
+  </div>
+  <div id="msg" class="msg"></div>
+</div>
+<script>
+const API="https://clgopzhigtwlcnonxewo.supabase.co/functions/v1/license-api";
+function show(t){const m=document.getElementById("msg");m.textContent=t;m.style.display="block"}
+async function loadStatus(){
+  const id=document.getElementById("acc").value.trim();
+  if(!id)return show("Please enter Account ID first.");
+  const r=await fetch(API+"/status",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({account_id:id})});
+  const d=await r.json();
+  if(!d.success)return show(d.error||"Error");
+  document.getElementById("panel").classList.remove("hide");
+  document.getElementById("stg").textContent=d.next_stage;
+  document.getElementById("val").textContent=(d.next_validity_hours/24>=1?(d.next_validity_hours/24)+" Day(s)":d.next_validity_hours+" Hours");
+  document.getElementById("ads").textContent=d.completed_ads+" / "+d.required_ads+" Ads";
+  const a=document.getElementById("adBtn"),f=document.getElementById("refBtn"),c=document.getElementById("clmBtn");
+  a.classList.add("hide");f.classList.add("hide");c.classList.add("hide");
+  if(d.has_active_key)return show("Active key valid until: "+new Date(d.active_expires_at).toLocaleString());
+  if(d.completed_ads>=d.required_ads){c.classList.remove("hide");c.textContent=d.required_ads===0?"Get 7-Day Starter Key":"Generate 24-Hour Key"}
+  else{a.classList.remove("hide");f.classList.remove("hide");a.href=d.ad_link||"#";a.textContent="Watch Ad ("+(d.required_ads-d.completed_ads)+" Left)";show("Complete ad above, then tap Refresh.")}
+}
+async function claimKey(){
+  const id=document.getElementById("acc").value.trim();
+  const r=await fetch(API+"/claim-key",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({account_id:id})});
+  const d=await r.json();
+  if(!d.success)return show(d.error||"Failed");
+  document.getElementById("keyBox").classList.remove("hide");
+  document.getElementById("keyOut").textContent=d.key;
+  document.getElementById("expOut").textContent=d.expires_at?"Expires: "+new Date(d.expires_at).toLocaleString():"Paste in Lua loader to start 7-day timer!";
+  show(d.message);document.getElementById("clmBtn").classList.add("hide");
+}
+function copyKey(){navigator.clipboard.writeText(document.getElementById("keyOut").textContent);show("Key copied!")}
+const urlId=new URLSearchParams(window.location.search).get("account_id");
+if(urlId){document.getElementById("acc").value=urlId;loadStatus();}
+</script>
+</body>
+</html>
