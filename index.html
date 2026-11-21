@@ -34,8 +34,7 @@ input{width:100%;box-sizing:border-box;background:#090b10;border:1px solid #2e36
     <div class="row"><span>Next Stage:</span><strong id="stg" style="color:#ff8c3b">-</strong></div>
     <div class="row"><span>Validity:</span><strong id="val">-</strong></div>
     <div class="row"><span>Verified Ads:</span><strong id="ads">0 / 0</strong></div>
-    <a id="adBtn" href="#" target="_blank" class="btn fire hide">Watch Required Ad</a>
-    <button id="refBtn" class="btn dark hide" onclick="loadStatus()">I Watched Ad — Refresh</button>
+    <a id="adBtn" href="#" class="btn fire hide" onclick="saveAccount()">Watch Required Ad</a>
     <button id="clmBtn" class="btn green hide" onclick="claimKey()">Generate License Key</button>
   </div>
   <div id="keyBox" class="box hide">
@@ -47,11 +46,14 @@ input{width:100%;box-sizing:border-box;background:#090b10;border:1px solid #2e36
   <div id="msg" class="msg"></div>
 </div>
 <script>
-const API="https://clgopzhigtwlcnonxewo.supabase.co/functions/v1/license-api";
+const API="https://supabase.co";
 function show(t){const m=document.getElementById("msg");m.textContent=t;m.style.display="block"}
+function saveAccount(){const id=document.getElementById("acc").value.trim();if(id)localStorage.setItem("firex_acc",id)}
+
 async function loadStatus(){
   const id=document.getElementById("acc").value.trim();
   if(!id)return show("Please enter Account ID first.");
+  saveAccount();
   const r=await fetch(API+"/status",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({account_id:id})});
   const d=await r.json();
   if(!d.success)return show(d.error||"Error");
@@ -59,14 +61,23 @@ async function loadStatus(){
   document.getElementById("stg").textContent=d.next_stage;
   document.getElementById("val").textContent=(d.next_validity_hours/24>=1?(d.next_validity_hours/24)+" Day(s)":d.next_validity_hours+" Hours");
   document.getElementById("ads").textContent=d.completed_ads+" / "+d.required_ads+" Ads";
-  const a=document.getElementById("adBtn"),f=document.getElementById("refBtn"),c=document.getElementById("clmBtn");
-  a.classList.add("hide");f.classList.add("hide");c.classList.add("hide");
+  const a=document.getElementById("adBtn"),c=document.getElementById("clmBtn");
+  a.classList.add("hide");c.classList.add("hide");
   if(d.has_active_key)return show("Active key valid until: "+new Date(d.active_expires_at).toLocaleString());
-  if(d.completed_ads>=d.required_ads){c.classList.remove("hide");c.textContent=d.required_ads===0?"Get 7-Day Starter Key":"Generate 24-Hour Key"}
-  else{a.classList.remove("hide");f.classList.remove("hide");a.href=d.ad_link||"#";a.textContent="Watch Ad ("+(d.required_ads-d.completed_ads)+" Left)";show("Complete ad above, then tap Refresh.")}
+  if(d.completed_ads>=d.required_ads){
+    c.classList.remove("hide");
+    c.textContent=d.required_ads===0?"Get 7-Day Starter Key":"Generate 24-Hour Key";
+  }else{
+    a.classList.remove("hide");
+    a.href=d.ad_link||"#";
+    a.textContent="Watch Ad ("+(d.required_ads-d.completed_ads)+" Required)";
+    show("Tap 'Watch Required Ad' and complete the Linkvertise task.");
+  }
 }
+
 async function claimKey(){
   const id=document.getElementById("acc").value.trim();
+  saveAccount();
   const r=await fetch(API+"/claim-key",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({account_id:id})});
   const d=await r.json();
   if(!d.success)return show(d.error||"Failed");
@@ -75,9 +86,25 @@ async function claimKey(){
   document.getElementById("expOut").textContent=d.expires_at?"Expires: "+new Date(d.expires_at).toLocaleString():"Paste in Lua loader to start 7-day timer!";
   show(d.message);document.getElementById("clmBtn").classList.add("hide");
 }
-function copyKey(){navigator.clipboard.writeText(document.getElementById("keyOut").textContent);show("Key copied!")}
-const urlId=new URLSearchParams(window.location.search).get("account_id");
-if(urlId){document.getElementById("acc").value=urlId;loadStatus();}
+
+function copyKey(){navigator.clipboard.writeText(document.getElementById("keyOut").textContent);show("Key copied! Paste it in Fire X Scripts.")}
+
+(async function init(){
+  const p=new URLSearchParams(window.location.search);
+  const id=p.get("account_id")||localStorage.getItem("firex_acc")||"";
+  if(id)document.getElementById("acc").value=id;
+  if(p.get("ad_done")==="1" && p.get("hash") && id){
+    show("Verifying Linkvertise completion...");
+    const tier=Number(p.get("tier")||1);
+    const vr=await fetch(API+"/verify-linkvertise",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({account_id:id,hash:p.get("hash"),tier})});
+    const vd=await vr.json();
+    window.history.replaceState({},"",window.location.pathname);
+    if(!vd.success)return show(vd.error||"Ad verification failed.");
+    await claimKey();
+    return;
+  }
+  if(id)loadStatus();
+})();
 </script>
 </body>
 </html>
