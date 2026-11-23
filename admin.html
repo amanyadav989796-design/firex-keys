@@ -6,20 +6,25 @@
 <title>Fire X Scripts — Analytics Dashboard</title>
 <style>
 body{background:#0b0d12;color:#fff;font-family:sans-serif;margin:0;padding:16px}
-.wrap{max-width:760px;margin:0 auto}
+.wrap{max-width:960px;margin:0 auto}
 .card{background:#141821;border:1px solid #ff6b0044;border-radius:14px;padding:18px;margin-bottom:14px}
-h2{margin:0 0 4px;color:#ff8c3b}
-.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:12px}
+h2{margin:0 0 6px;color:#ff8c3b;font-size:20px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-top:12px}
 .stat{background:#0f131a;border:1px solid #232936;border-radius:10px;padding:12px}
 .stat span{font-size:11px;color:#9ca3af;display:block}
 .stat strong{font-size:18px;color:#fff;margin-top:4px;display:block}
 input{width:100%;box-sizing:border-box;background:#090b10;border:1px solid #2e3646;color:#fff;padding:11px;border-radius:8px;margin-top:8px}
 .btn{width:100%;padding:12px;border:none;border-radius:9px;font-weight:700;cursor:pointer;margin-top:10px;background:linear-gradient(135deg,#ff512f,#f09819);color:#fff}
-.acc-card{background:#0f131a;border:1px solid #2a3140;border-radius:12px;margin-top:12px;overflow:hidden}
-.t-row{display:flex;justify-content:space-between;align-items:flex-start;padding:10px 14px;border-bottom:1px solid #1e2430;font-size:12px;gap:10px}
-.t-row:last-child{border-bottom:none}
-.t-lbl{color:#9ca3af;font-weight:700;min-width:105px}
-.t-val{color:#e5e7eb;text-align:right;line-height:1.5}
+.tbl-wrap{width:100%;overflow-x:auto;margin-top:14px;border:1px solid #2a3140;border-radius:10px;background:#0f131a}
+table{width:100%;border-collapse:collapse;min-width:680px;text-align:left;font-size:12px}
+thead th{background:#191f2c;color:#e5e7eb;font-weight:700;padding:12px 14px;border-bottom:1px solid #2a3140;white-space:nowrap}
+tbody td{padding:11px 14px;border-bottom:1px solid #1c222e;color:#d1d5db;vertical-align:top;white-space:nowrap}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:#151b26}
+.acc-id{color:#ff8c3b;font-weight:700;font-family:monospace;font-size:13px}
+.sub-txt{display:block;font-size:11px;color:#9ca3af;margin-top:2px}
+.ok{color:#34d399;font-weight:700}
+.fail{color:#f87171;font-weight:700}
 .hide{display:none}
 </style>
 </head>
@@ -38,19 +43,34 @@ input{width:100%;box-sizing:border-box;background:#090b10;border:1px solid #2e36
       <h2>Global Overview</h2>
       <div class="grid" id="globalStats"></div>
     </div>
+
     <div class="card">
       <h2>Player Analytics (Row-by-Row)</h2>
       <input id="searchAcc" placeholder="Filter by Account ID..." oninput="renderUsers()" />
-      <div id="userList"></div>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Account ID</th>
+              <th>Execution</th>
+              <th>Website</th>
+              <th>Gameplay</th>
+              <th>Key Attempts</th>
+            </tr>
+          </thead>
+          <tbody id="userTableBody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>
+
 <script>
 const SB_HOST = "clgopzhigtwlcnonxewo" + ".supabase.co";
 const API = "https://" + SB_HOST + "/functions/v1/license-api";
 let ALL_USERS = {};
 
-const fmtTime = (iso) => iso ? new Date(iso).toLocaleString() : "Never";
+const fmtTime = (iso) => iso ? new Date(iso).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : "Never";
 const fmtDur = (sec) => {
   const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
   return h > 0 ? h + "h " + m + "m" : m + "m " + (sec % 60) + "s";
@@ -117,16 +137,30 @@ async function loadAnalytics(){
 function renderUsers(){
   const q = document.getElementById("searchAcc").value.trim().toLowerCase();
   const list = Object.values(ALL_USERS).filter(u => u.id.toLowerCase().includes(q));
-  document.getElementById("userList").innerHTML = list.map(u => {
+  document.getElementById("userTableBody").innerHTML = list.map(u => {
     const avg = u.execs ? Math.round(u.playSec / u.execs) : 0;
-    return `<div class="acc-card">
-      <div class="t-row" style="background:#161b26"><span class="t-lbl" style="color:#ff8c3b">Account ID</span><span class="t-val"><strong style="color:#ff8c3b;font-size:14px">${u.id}</strong></span></div>
-      <div class="t-row"><span class="t-lbl">Execution</span><span class="t-val">Total: <b>${u.execs}</b> | Today: <b>${u.dailyExecs}</b><br>First: ${fmtTime(u.firstExec)}<br>Last: ${fmtTime(u.lastExec)}</span></div>
-      <div class="t-row"><span class="t-lbl">Website</span><span class="t-val">Visits/Sessions: <b>${u.visits}</b><br>First: ${fmtTime(u.firstVisit)}<br>Last: ${fmtTime(u.lastVisit)}</span></div>
-      <div class="t-row"><span class="t-lbl">Gameplay</span><span class="t-val">Total: <b>${fmtDur(u.playSec)}</b> | Today: <b>${fmtDur(u.dailyPlaySec)}</b><br>Last Session: <b>${fmtDur(u.lastSessionDur)}</b> | Avg: <b>${fmtDur(avg)}</b></span></div>
-      <div class="t-row"><span class="t-lbl">Key Attempts</span><span class="t-val">Total: <b>${u.claimOk + u.claimFail}</b> (<span style="color:#34d399">${u.claimOk} Success</span> / <span style="color:#f87171">${u.claimFail} Failed</span>)</span></div>
-    </div>`;
-  }).join("") || "<div style='color:#9ca3af;margin-top:10px'>No records found.</div>";
+    return `<tr>
+      <td class="acc-id">${u.id}</td>
+      <td>
+        <strong>${u.execs} Total</strong> (${u.dailyExecs} Today)
+        <span class="sub-txt">First: ${fmtTime(u.firstExec)}</span>
+        <span class="sub-txt">Last: ${fmtTime(u.lastExec)}</span>
+      </td>
+      <td>
+        <strong>${u.visits} Visits</strong>
+        <span class="sub-txt">First: ${fmtTime(u.firstVisit)}</span>
+        <span class="sub-txt">Last: ${fmtTime(u.lastVisit)}</span>
+      </td>
+      <td>
+        <strong>${fmtDur(u.playSec)} Total</strong> (${fmtDur(u.dailyPlaySec)} Today)
+        <span class="sub-txt">Last: ${fmtDur(u.lastSessionDur)} | Avg: ${fmtDur(avg)}</span>
+      </td>
+      <td>
+        <strong>${u.claimOk + u.claimFail} Total</strong>
+        <span class="sub-txt"><span class="ok">${u.claimOk} Pass</span> / <span class="fail">${u.claimFail} Fail</span></span>
+      </td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="5" style="text-align:center;color:#9ca3af;padding:18px">No player records found.</td></tr>`;
 }
 </script>
 </body>
