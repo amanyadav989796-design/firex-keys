@@ -6,7 +6,7 @@
 <title>Fire X Scripts — Analytics Dashboard</title>
 <style>
 body{background:#0b0d12;color:#fff;font-family:sans-serif;margin:0;padding:16px}
-.wrap{max-width:720px;margin:0 auto}
+.wrap{max-width:760px;margin:0 auto}
 .card{background:#141821;border:1px solid #ff6b0044;border-radius:14px;padding:18px;margin-bottom:14px}
 h2{margin:0 0 4px;color:#ff8c3b}
 .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:12px}
@@ -15,7 +15,11 @@ h2{margin:0 0 4px;color:#ff8c3b}
 .stat strong{font-size:18px;color:#fff;margin-top:4px;display:block}
 input{width:100%;box-sizing:border-box;background:#090b10;border:1px solid #2e3646;color:#fff;padding:11px;border-radius:8px;margin-top:8px}
 .btn{width:100%;padding:12px;border:none;border-radius:9px;font-weight:700;cursor:pointer;margin-top:10px;background:linear-gradient(135deg,#ff512f,#f09819);color:#fff}
-.user-row{background:#0f131a;border:1px solid #232936;border-radius:10px;padding:12px;margin-top:10px;font-size:12px;line-height:1.6}
+.acc-card{background:#0f131a;border:1px solid #2a3140;border-radius:12px;margin-top:12px;overflow:hidden}
+.t-row{display:flex;justify-content:space-between;align-items:flex-start;padding:10px 14px;border-bottom:1px solid #1e2430;font-size:12px;gap:10px}
+.t-row:last-child{border-bottom:none}
+.t-lbl{color:#9ca3af;font-weight:700;min-width:105px}
+.t-val{color:#e5e7eb;text-align:right;line-height:1.5}
 .hide{display:none}
 </style>
 </head>
@@ -35,7 +39,7 @@ input{width:100%;box-sizing:border-box;background:#090b10;border:1px solid #2e36
       <div class="grid" id="globalStats"></div>
     </div>
     <div class="card">
-      <h2>Per-Account Breakdown</h2>
+      <h2>Player Analytics (Row-by-Row)</h2>
       <input id="searchAcc" placeholder="Filter by Account ID..." oninput="renderUsers()" />
       <div id="userList"></div>
     </div>
@@ -66,7 +70,7 @@ async function loadAnalytics(){
 
   const today = new Date().toISOString().slice(0, 10);
   let totalExec = d.sessions.length, dailyExec = 0, totalPlaySec = 0, dailyPlaySec = 0;
-  let webVisits = 0, webSessions = 0, claimOk = 0, claimFail = 0;
+  let webVisits = 0, claimOk = 0, claimFail = 0;
   const users = {};
 
   const ensure = (id) => {
@@ -88,7 +92,7 @@ async function loadAnalytics(){
   d.events.forEach(e => {
     const u = ensure(e.account_id);
     if(e.event_type === "visit"){
-      webVisits++; webSessions++; u.visits++;
+      webVisits++; u.visits++;
       if(!u.lastVisit || e.created_at > u.lastVisit) u.lastVisit = e.created_at;
       if(!u.firstVisit || e.created_at < u.firstVisit) u.firstVisit = e.created_at;
     } else if(e.event_type === "claim_success"){ claimOk++; u.claimOk++; }
@@ -98,14 +102,14 @@ async function loadAnalytics(){
   ALL_USERS = users;
   const avgSec = totalExec ? Math.round(totalPlaySec / totalExec) : 0;
   document.getElementById("globalStats").innerHTML = `
-    <div class="stat"><span>Total Executions / Sessions</span><strong>${totalExec}</strong></div>
+    <div class="stat"><span>Total Executions</span><strong>${totalExec}</strong></div>
     <div class="stat"><span>Daily Executions</span><strong>${dailyExec}</strong></div>
-    <div class="stat"><span>Total Gameplay Time</span><strong>${fmtDur(totalPlaySec)}</strong></div>
-    <div class="stat"><span>Daily Gameplay Time</span><strong>${fmtDur(dailyPlaySec)}</strong></div>
-    <div class="stat"><span>Avg Session Duration</span><strong>${fmtDur(avgSec)}</strong></div>
-    <div class="stat"><span>Website Visits / Sessions</span><strong>${webVisits}</strong></div>
-    <div class="stat"><span>Key Claims (Success / Fail)</span><strong>${claimOk} / ${claimFail}</strong></div>
-    <div class="stat"><span>Unique Tracked Accounts</span><strong>${Object.keys(users).length}</strong></div>
+    <div class="stat"><span>Total Gameplay</span><strong>${fmtDur(totalPlaySec)}</strong></div>
+    <div class="stat"><span>Daily Gameplay</span><strong>${fmtDur(dailyPlaySec)}</strong></div>
+    <div class="stat"><span>Avg Session</span><strong>${fmtDur(avgSec)}</strong></div>
+    <div class="stat"><span>Website Visits</span><strong>${webVisits}</strong></div>
+    <div class="stat"><span>Keys (Success / Fail)</span><strong>${claimOk} / ${claimFail}</strong></div>
+    <div class="stat"><span>Unique Players</span><strong>${Object.keys(users).length}</strong></div>
   `;
   renderUsers();
 }
@@ -115,12 +119,12 @@ function renderUsers(){
   const list = Object.values(ALL_USERS).filter(u => u.id.toLowerCase().includes(q));
   document.getElementById("userList").innerHTML = list.map(u => {
     const avg = u.execs ? Math.round(u.playSec / u.execs) : 0;
-    return `<div class="user-row">
-      <strong style="color:#ff8c3b;font-size:14px">Account ID: ${u.id}</strong><br>
-      <b>Executions:</b> ${u.execs} total (${u.dailyExecs} today) | <b>First:</b> ${fmtTime(u.firstExec)} | <b>Last:</b> ${fmtTime(u.lastExec)}<br>
-      <b>Gameplay:</b> ${fmtDur(u.playSec)} total (${fmtDur(u.dailyPlaySec)} today) | <b>Avg:</b> ${fmtDur(avg)} | <b>Last Session:</b> ${fmtDur(u.lastSessionDur)}<br>
-      <b>Website:</b> ${u.visits} visits | <b>First:</b> ${fmtTime(u.firstVisit)} | <b>Last:</b> ${fmtTime(u.lastVisit)}<br>
-      <b>Key Attempts:</b> ${u.claimOk + u.claimFail} total (${u.claimOk} Success, ${u.claimFail} Failed)
+    return `<div class="acc-card">
+      <div class="t-row" style="background:#161b26"><span class="t-lbl" style="color:#ff8c3b">Account ID</span><span class="t-val"><strong style="color:#ff8c3b;font-size:14px">${u.id}</strong></span></div>
+      <div class="t-row"><span class="t-lbl">Execution</span><span class="t-val">Total: <b>${u.execs}</b> | Today: <b>${u.dailyExecs}</b><br>First: ${fmtTime(u.firstExec)}<br>Last: ${fmtTime(u.lastExec)}</span></div>
+      <div class="t-row"><span class="t-lbl">Website</span><span class="t-val">Visits/Sessions: <b>${u.visits}</b><br>First: ${fmtTime(u.firstVisit)}<br>Last: ${fmtTime(u.lastVisit)}</span></div>
+      <div class="t-row"><span class="t-lbl">Gameplay</span><span class="t-val">Total: <b>${fmtDur(u.playSec)}</b> | Today: <b>${fmtDur(u.dailyPlaySec)}</b><br>Last Session: <b>${fmtDur(u.lastSessionDur)}</b> | Avg: <b>${fmtDur(avg)}</b></span></div>
+      <div class="t-row"><span class="t-lbl">Key Attempts</span><span class="t-val">Total: <b>${u.claimOk + u.claimFail}</b> (<span style="color:#34d399">${u.claimOk} Success</span> / <span style="color:#f87171">${u.claimFail} Failed</span>)</span></div>
     </div>`;
   }).join("") || "<div style='color:#9ca3af;margin-top:10px'>No records found.</div>";
 }
