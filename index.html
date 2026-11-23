@@ -27,7 +27,6 @@ input{width:100%;box-sizing:border-box;background:#090b10;border:1px solid #2e36
 <div class="card">
   <h2>Fire X Scripts</h2>
   <div class="sub">Official Key Generator & License Portal</div>
-
   <div class="box">
     <div id="idFieldWrap" class="hide" style="margin-bottom:12px">
       <label style="font-size:12px;color:#9ca3af">Player Account ID</label>
@@ -35,40 +34,31 @@ input{width:100%;box-sizing:border-box;background:#090b10;border:1px solid #2e36
     </div>
     <button class="btn dark btn-top" id="chkBtn" onclick="loadStatus()">Check Progress</button>
   </div>
-
   <div id="panel" class="box hide">
     <div class="row"><span>Verified Ads:</span><strong id="ads" style="color:#ff8c3b">0 / 0</strong></div>
     <a id="adBtn" href="#" class="btn fire hide" onclick="saveAccount()">Watch Required Ad</a>
     <button id="clmBtn" class="btn green hide" onclick="claimKey()">Generate License Key</button>
   </div>
-
   <div id="keyBox" class="box hide">
     <div style="font-size:12px;color:#9ca3af;text-align:center">Your Active Fire X Key:</div>
     <div class="key" id="keyOut">-</div>
     <button class="btn fire" onclick="copyKey()">Copy Key</button>
   </div>
-
   <div id="msg" class="msg"></div>
 </div>
-
 <script>
 const SB_HOST = "clgopzhigtwlcnonxewo" + ".supabase.co";
 const API = "https://" + SB_HOST + "/functions/v1/license-api";
-
 function show(t){const m=document.getElementById("msg");m.textContent=t;m.style.display="block"}
 function hideMsg(){const m=document.getElementById("msg");m.style.display="none"}
 function saveAccount(){const id=document.getElementById("acc").value.trim();if(id)localStorage.setItem("firex_acc",id)}
+function track(id,evt,det){fetch(API+"/track-web",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({account_id:id||"anonymous",event_type:evt,details:det||""})}).catch(()=>{})}
 
 async function loadStatus(){
   const id=document.getElementById("acc").value.trim();
-  if(!id){
-    document.getElementById("idFieldWrap").classList.remove("hide");
-    return show("Open this portal using the Copy Key Link button in-game, or enter your Account ID above.");
-  }
-  saveAccount();
-  hideMsg();
-  const btn=document.getElementById("chkBtn");
-  btn.textContent="Checking...";
+  if(!id){document.getElementById("idFieldWrap").classList.remove("hide");return show("Open this portal using Copy Key Link in-game, or enter Account ID above.");}
+  saveAccount();hideMsg();
+  const btn=document.getElementById("chkBtn");btn.textContent="Checking...";
   try{
     const r=await fetch(API+"/status",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({account_id:id})});
     const d=await r.json();
@@ -77,30 +67,15 @@ async function loadStatus(){
     document.getElementById("ads").textContent=d.completed_ads+" / "+d.required_ads+" Ads";
     const a=document.getElementById("adBtn"),c=document.getElementById("clmBtn");
     a.classList.add("hide");c.classList.add("hide");
-    if(d.has_active_key){
-      document.getElementById("panel").classList.add("hide");
-      return show("Your license key is currently active.");
-    }
-    if(d.completed_ads>=d.required_ads){
-      c.classList.remove("hide");
-      c.textContent="Generate License Key";
-    }else{
-      a.classList.remove("hide");
-      a.href=d.ad_link||"#";
-      a.textContent="Watch Ad ("+(d.required_ads-d.completed_ads)+" Required)";
-      show("Tap 'Watch Ad' and complete the verification task.");
-    }
-  }catch(e){
-    show("Network error: "+e.message);
-  }finally{
-    btn.textContent="Check Progress";
-  }
+    if(d.has_active_key){document.getElementById("panel").classList.add("hide");return show("Your license key is currently active.");}
+    if(d.completed_ads>=d.required_ads){c.classList.remove("hide");c.textContent="Generate License Key";}
+    else{a.classList.remove("hide");a.href=d.ad_link||"#";a.textContent="Watch Ad ("+(d.required_ads-d.completed_ads)+" Required)";show("Tap 'Watch Ad' and complete the verification task.");}
+  }catch(e){show("Network error: "+e.message);}finally{btn.textContent="Check Progress";}
 }
 
 async function claimKey(){
   const id=document.getElementById("acc").value.trim();
-  saveAccount();
-  hideMsg();
+  saveAccount();hideMsg();
   const r=await fetch(API+"/claim-key",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({account_id:id})});
   const d=await r.json();
   if(!d.success)return show(d.error||"Failed");
@@ -108,32 +83,24 @@ async function claimKey(){
   document.getElementById("keyBox").classList.remove("hide");
   document.getElementById("keyOut").textContent=d.key;
 }
-
 function copyKey(){navigator.clipboard.writeText(document.getElementById("keyOut").textContent);show("Key copied!")}
 
 (async function init(){
   const p=new URLSearchParams(window.location.search);
   const urlId=p.get("account_id");
   const id=(urlId||localStorage.getItem("firex_acc")||"").trim();
-  if(id){
-    document.getElementById("acc").value=id;
-    saveAccount();
-  }
-
+  if(id){document.getElementById("acc").value=id;saveAccount();}
+  track(id,"visit",p.get("ad_done")==="1"?"ad_return":"direct");
   if(p.get("ad_done")==="1"){
-    if(!id){
-      document.getElementById("idFieldWrap").classList.remove("hide");
-      return show("Account ID missing! Enter your Account ID above and tap Check Progress.");
-    }
-    if(!p.get("hash"))return show("Verification hash missing! Please complete the ad properly.");
+    if(!id){document.getElementById("idFieldWrap").classList.remove("hide");return show("Account ID missing!");}
+    if(!p.get("hash"))return show("Verification hash missing!");
     show("Verifying ad completion...");
     const tier=Number(p.get("tier")||1);
     const vr=await fetch(API+"/verify-linkvertise",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({account_id:id,hash:p.get("hash"),tier})});
     const vd=await vr.json();
     window.history.replaceState({},"",window.location.pathname);
     if(!vd.success)return show(vd.error||"Ad verification failed.");
-    await claimKey();
-    return;
+    await claimKey();return;
   }
   if(id)loadStatus();
 })();
