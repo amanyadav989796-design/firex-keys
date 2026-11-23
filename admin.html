@@ -1,1 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Fire X Scripts — Analytics Dashboard</title>
+<style>
+body{background:#0b0d12;color:#fff;font-family:sans-serif;margin:0;padding:16px}
+.wrap{max-width:720px;margin:0 auto}
+.card{background:#141821;border:1px solid #ff6b0044;border-radius:14px;padding:18px;margin-bottom:14px}
+h2{margin:0 0 4px;color:#ff8c3b}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:12px}
+.stat{background:#0f131a;border:1px solid #232936;border-radius:10px;padding:12px}
+.stat span{font-size:11px;color:#9ca3af;display:block}
+.stat strong{font-size:18px;color:#fff;margin-top:4px;display:block}
+input{width:100%;box-sizing:border-box;background:#090b10;border:1px solid #2e3646;color:#fff;padding:11px;border-radius:8px;margin-top:8px}
+.btn{width:100%;padding:12px;border:none;border-radius:9px;font-weight:700;cursor:pointer;margin-top:10px;background:linear-gradient(135deg,#ff512f,#f09819);color:#fff}
+.user-row{background:#0f131a;border:1px solid #232936;border-radius:10px;padding:12px;margin-top:10px;font-size:12px;line-height:1.6}
+.hide{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card" id="loginBox">
+    <h2>Fire X Analytics</h2>
+    <div style="font-size:12px;color:#9ca3af">Enter Admin Secret to load live metrics</div>
+    <input id="pw" type="password" placeholder="Admin Secret..." />
+    <button class="btn" onclick="loadAnalytics()">Load Dashboard</button>
+    <div id="err" style="color:#f87171;font-size:12px;margin-top:8px"></div>
+  </div>
 
+  <div id="dash" class="hide">
+    <div class="card">
+      <h2>Global Overview</h2>
+      <div class="grid" id="globalStats"></div>
+    </div>
+    <div class="card">
+      <h2>Per-Account Breakdown</h2>
+      <input id="searchAcc" placeholder="Filter by Account ID..." oninput="renderUsers()" />
+      <div id="userList"></div>
+    </div>
+  </div>
+</div>
+<script>
+const SB_HOST = "clgopzhigtwlcnonxewo" + ".supabase.co";
+const API = "https://" + SB_HOST + "/functions/v1/license-api";
+let ALL_USERS = {};
+
+const fmtTime = (iso) => iso ? new Date(iso).toLocaleString() : "Never";
+const fmtDur = (sec) => {
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
+  return h > 0 ? h + "h " + m + "m" : m + "m " + (sec % 60) + "s";
+};
+
+async function loadAnalytics(){
+  const pw = document.getElementById("pw").value.trim();
+  const r = await fetch(API + "/admin-analytics", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password: pw })
+  });
+  const d = await r.json();
+  if(!d.success){ document.getElementById("err").textContent = d.error || "Failed"; return; }
+  document.getElementById("loginBox").classList.add("hide");
+  document.getElementById("dash").classList.remove("hide");
+
+  const today = new Date().toISOString().slice(0, 10);
+  let totalExec = d.sessions.length, dailyExec = 0, totalPlaySec = 0, dailyPlaySec = 0;
+  let webVisits = 0, webSessions = 0, claimOk = 0, claimFail = 0;
+  const users = {};
+
+  const ensure = (id) => {
+    if(!users[id]) users[id] = { id, execs: 0, dailyExecs: 0, firstExec: null, lastExec: null, playSec: 0, dailyPlaySec: 0, lastSessionDur: 0, visits: 0, firstVisit: null, lastVisit: null, claimOk: 0, claimFail: 0 };
+    return users[id];
+  };
+
+  d.sessions.forEach(s => {
+    const u = ensure(s.account_id);
+    const dur = Number(s.duration_seconds || 0);
+    const isToday = String(s.started_at).startsWith(today);
+    totalPlaySec += dur;
+    if(isToday){ dailyExec++; dailyPlaySec += dur; u.dailyExecs++; u.dailyPlaySec += dur; }
+    u.execs++; u.playSec += dur;
+    if(!u.lastExec || s.started_at > u.lastExec){ u.lastExec = s.started_at; u.lastSessionDur = dur; }
+    if(!u.firstExec || s.started_at < u.firstExec) u.firstExec = s.started_at;
+  });
+
+  d.events.forEach(e => {
+    const u = ensure(e.account_id);
+    if(e.event_type === "visit"){
+      webVisits++; webSessions++; u.visits++;
+      if(!u.lastVisit || e.created_at > u.lastVisit) u.lastVisit = e.created_at;
+      if(!u.firstVisit || e.created_at < u.firstVisit) u.firstVisit = e.created_at;
+    } else if(e.event_type === "claim_success"){ claimOk++; u.claimOk++; }
+    else if(e.event_type === "claim_failed"){ claimFail++; u.claimFail++; }
+  });
+
+  ALL_USERS = users;
+  const avgSec = totalExec ? Math.round(totalPlaySec / totalExec) : 0;
+  document.getElementById("globalStats").innerHTML = `
+    <div class="stat"><span>Total Executions / Sessions</span><strong>${totalExec}</strong></div>
+    <div class="stat"><span>Daily Executions</span><strong>${dailyExec}</strong></div>
+    <div class="stat"><span>Total Gameplay Time</span><strong>${fmtDur(totalPlaySec)}</strong></div>
+    <div class="stat"><span>Daily Gameplay Time</span><strong>${fmtDur(dailyPlaySec)}</strong></div>
+    <div class="stat"><span>Avg Session Duration</span><strong>${fmtDur(avgSec)}</strong></div>
+    <div class="stat"><span>Website Visits / Sessions</span><strong>${webVisits}</strong></div>
+    <div class="stat"><span>Key Claims (Success / Fail)</span><strong>${claimOk} / ${claimFail}</strong></div>
+    <div class="stat"><span>Unique Tracked Accounts</span><strong>${Object.keys(users).length}</strong></div>
+  `;
+  renderUsers();
+}
+
+function renderUsers(){
+  const q = document.getElementById("searchAcc").value.trim().toLowerCase();
+  const list = Object.values(ALL_USERS).filter(u => u.id.toLowerCase().includes(q));
+  document.getElementById("userList").innerHTML = list.map(u => {
+    const avg = u.execs ? Math.round(u.playSec / u.execs) : 0;
+    return `<div class="user-row">
+      <strong style="color:#ff8c3b;font-size:14px">Account ID: ${u.id}</strong><br>
+      <b>Executions:</b> ${u.execs} total (${u.dailyExecs} today) | <b>First:</b> ${fmtTime(u.firstExec)} | <b>Last:</b> ${fmtTime(u.lastExec)}<br>
+      <b>Gameplay:</b> ${fmtDur(u.playSec)} total (${fmtDur(u.dailyPlaySec)} today) | <b>Avg:</b> ${fmtDur(avg)} | <b>Last Session:</b> ${fmtDur(u.lastSessionDur)}<br>
+      <b>Website:</b> ${u.visits} visits | <b>First:</b> ${fmtTime(u.firstVisit)} | <b>Last:</b> ${fmtTime(u.lastVisit)}<br>
+      <b>Key Attempts:</b> ${u.claimOk + u.claimFail} total (${u.claimOk} Success, ${u.claimFail} Failed)
+    </div>`;
+  }).join("") || "<div style='color:#9ca3af;margin-top:10px'>No records found.</div>";
+}
+</script>
+</body>
+</html>
